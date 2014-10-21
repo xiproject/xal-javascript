@@ -54,3 +54,14 @@ register({
   name: 'test',
   subscribe: 'xi.input.speech'
 });
+function messageHandler(req , res ,next){
+    if(eventListeners[req.body.event]){
+        for( var i =0; i < eventListeners[req.body.event].length ; i++){
+            eventListeners[req.body.event][i]( null, req.body.state);
+        }
+    }
+    log.debug( {req: req});
+    res.send(200);
+    next();
+}
+module.exports.messageHandler = messageHandler;

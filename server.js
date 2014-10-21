@@ -1,21 +1,7 @@
 var restify = require('restify');
-var bunyan = require('bunyan');
+var log = require('./log.js');
 var uuid = require('node-uuid');
-
-var log = bunyan.createLogger({
-  name: 'xal-javascript',
-  streams: [
-    {
-      stream: process.stdout,
-      level: 'debug'
-    },
-  ],
-  serializers: {
-    req: bunyan.stdSerializers.req,
-    res: bunyan.stdSerializers.res
-  }
-});
-
+var xal = require('./xal.js');
 var server = restify.createServer({
   name: 'xal-javascript',
   log: log
@@ -39,16 +25,21 @@ function ping(req, res, next) {
   next();
 }
 
+
+/*
 function message(req, res, next) {
   res.send(200);
   next();
 }
+*/
 
 server.get('/ping', ping);
-server.post('/message', message);
+
+server.post('/message', xal.messageHandler);
 
 server.listen(2015, function() {
   log.info('%s listening at %s', server.name, server.url);
 });
 
-module.exports.log = log;
+
+
