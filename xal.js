@@ -2,7 +2,7 @@ var restify = require('restify');
 var config = require('./config.json');
 var bunyan = require('bunyan');
 var log = require('./log.js');
-
+var _ = require('underscore.js');
 var xiClient = restify.createJsonClient({
     url: config['xi-core'].url,
     version: '*',
@@ -12,7 +12,7 @@ var xiClient = restify.createJsonClient({
 /* XAL State */
 var id;
 var name;
-var eventListeners = {};
+var eventListeners = [];
 
 /* Register with xi-core */
 function register(data, cb) {
@@ -36,15 +36,20 @@ function register(data, cb) {
    data = { id: id , events: [] }
 */
 
-function subscribe(data, cb){
-    xiClient.post('/subscribe', data, function(err, request, response, body){
+
+
+/* Update state */
+//TODO: enter eventId correctly
+function events(data, cb)
+{
+    xiClient.put('/events/:event_id', data, function(err, request, response, body){
         if(err){
             log.error(err);
             if(cb)
                 cb(err);
             return;
         }
-        log.info("Subscribed successfully");
+        log.info("Updated state successfully");
         if(cb)
             cb(null,body.id);
     });
@@ -65,12 +70,7 @@ function ping(cb) {
 }
 
 function on(event, cb) {
-    if (eventListeners.hasOwnProperty(event)) {
-        eventListeners[event].push(cb);
-    } else {
-        eventListeners[event] = [];
-        eventListeners[event].push(cb);
-    }
+    eventListeners.push( {event: event, callback: cb});
     log.debug("Registered new callback for event: " + event);
 }
 
@@ -102,13 +102,107 @@ function start(err, cb){
              });
 }
 
-function messageHandler(req , res ,next){
-    if(eventListeners[req.body.event]){
-        for( var i =0; i < eventListeners[req.body.event].length ; i++){
-            eventListeners[req.body.event][i]( null, req.body.state);
+
+
+// Maps eventIds to the internal state and if processing is going on
+
+var eventHash = {};
+
+function diffState(intialState, updatedState){
+    eventList = [];
+    for( var i =0 ; i < eventListeners.length ; i++){
+        if( _isEqual(getValue(intialState , eventListeners[i].event),getValue(updatedState , eventListeners[i].event) )){
+            eventList.push( eventListeners[i]);
         }
     }
+}
+
+function getValue(obj, name) {
+    if (Object.hasOwnProperty(obj, name))
+        return obj[name];
+    var keys = name.split('.');
+    for (var i = 0; i < keys.length; ++i) {
+        var key = keys.slice(0, i+1).join('.');
+        if (obj.hasOwnProperty(key))
+            return getValue(obj[key], keys.slice(i+1, keys.length).join('.'));
+    }
+    return null;
+}
+
+
+
+
+function runEventHandlers( eventId){
+    newState = eventHash[eventId].newState;
+    eventHash[eventId].newState = null;
+    eventHash[eventId].processing = true; 
+    eventList = generateEventList( eventHash[eventId].internalState, newState);
+
+    /*
+      var parts = req.body.event.split('.');
+      var eventList = [parts[0]];
+      log.info("Matching the following events:");
+      log.info(parts[0]);
+      
+      for(var i = 1 ; i < parts.length ; i++){
+      log.info(eventList[i]);
+      eventList.push( eventList[i-1]+"." + parts[i]);
+      }
+
+    */
+    var callback = function(updatedState){
+        i = i+1;
+        eventHash[eventId].internalState = updatedState;
+        
+        if( eventsListeners.length == i ){
+            //send updated state
+            update({ state: internalState , cid: req.body.eventId });
+            //If new state exists in queue, run handlers again
+            if( eventHash[eventId].newState){
+                runEventHandlers(eventId);
+            }
+            else{
+                eventHash[eventId].processing = false; 
+            }
+            return;
+        }
+        conversationState = updatedState;
+        runEventListener(i, callback);
+    };
+    var runEventListener =  function(i ,  cb ){
+        for( var j =0 ; j< eventList.length; j++){
+            eventList[i].callback( null , newState, eventHash[eventId].internalState , callback);
+
+        }
+    };
+    runEventListeners(0, callback );
+}
+
+
+/*
+  Parameter names:
+  xi-event
+  matched
+
+  //match-needs to be 
+  */
+function eventHandler(req , res ,next){
+
     log.debug( {req: req});
+    var state = req.body.state;
+    var eventId = req.body.eventId;
+
+    //processing -> if handlers are currently being executed
+    if(!eventHash[eventId]){
+        eventHash[eventId] = {
+            processing: false,
+            internalState: {},
+        };
+    }
+    eventHash[eventId].newState = state;
+    if(!eventHash[eventId].processing){
+        runEventHandlers( eventId);
+    }
     res.send(200);
     next();
 }
@@ -117,4 +211,4 @@ function messageHandler(req , res ,next){
 module.exports.on = on;
 module.exports.setName = setName;
 module.exports.start = start;
-module.exports.messageHandler = messageHandler;
+module.exports.eventHandler = eventHandler;
