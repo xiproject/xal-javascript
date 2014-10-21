@@ -10,6 +10,11 @@ var server = restify.createServer({
 server.pre(restify.pre.userAgentConnection());
 
 server.use(restify.requestLogger());
+server.use(restify.bodyParser());
+server.on('uncaughtException', function( req, res ,route , err){
+    res.send(500);
+    res.log.error(err);
+});
 
 server.pre(function(req, res, next) {
   req.log.debug({req: req});
@@ -34,12 +39,13 @@ function message(req, res, next) {
 */
 
 server.get('/ping', ping);
-
+console.log(xal);
 server.post('/event', xal.eventHandler);
 
 server.listen(2015, function() {
   log.info('%s listening at %s', server.name, server.url);
 });
+
 
 
 

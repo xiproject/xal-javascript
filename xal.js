@@ -2,12 +2,13 @@ var restify = require('restify');
 var config = require('./config.json');
 var bunyan = require('bunyan');
 var log = require('./log.js');
-var _ = require('underscore.js');
+var _ = require('underscore');
 var xiClient = restify.createJsonClient({
     url: config['xi-core'].url,
     version: '*',
     log: log
 });
+
 
 /* XAL State */
 var id;
@@ -35,25 +36,62 @@ function register(data, cb) {
    Agent has to be registered with xi-core before subscribing
    data = { id: id , events: [] }
 */
-
-
-
-/* Update state */
-//TODO: enter eventId correctly
-function events(data, cb)
+function subscribe(data, cb)
 {
-    xiClient.put('/events/:event_id', data, function(err, request, response, body){
+    xiClient.post('/subscribe', data, function(err, request, response, body){
         if(err){
             log.error(err);
             if(cb)
                 cb(err);
             return;
         }
-        log.info("Updated state successfully");
+        log.info("Subscribed successfully");
         if(cb)
             cb(null,body.id);
     });
 }
+
+
+/* Update state */
+//TODO: enter eventId correctly
+function postEvent(data, cb)
+{
+    xiClient.post('/event', data, function(err, request, response, body){
+        if(err){
+            log.error(err);
+            if(cb)
+                cb(err);
+            return;
+        }
+        log.info("Posted event successfully");
+        log.info( body);
+        log.info( {res: response});
+        if(cb)
+            cb(null,body.id);
+    });
+}
+
+function updateEvent(data, cb)
+{
+    xiClient.put('/event', data, function(err, request, response, body){
+        if(err){
+            log.error(err);
+            if(cb)
+                cb(err);
+            return;
+        }
+        log.info("Updating event");
+        log.info("The event is");
+        log.info(data);
+        log.info("Updated event successfully");
+        log.info("The response is");
+        log.info({res: response});
+        if(cb)
+            cb(null,body.id);
+    });
+}
+
+
 
 function ping(cb) {
     xiClient.get('/ping', function(err, request, response, body) {
@@ -81,7 +119,7 @@ function setName(data){
 
 function start(err, cb){
     log.info("Registering agent with name ", name);
-    register({ name: name},
+    register({ name: name, url: "http://10.139.13.147:2015"},
              function(err){
                  if(err){
                      log.error(err);
@@ -91,13 +129,13 @@ function start(err, cb){
                  }
                  else{
                      var keys = [];
-                     for(var k in eventListeners){
-                         if(eventListeners.hasOwnProperty(k))
-                             keys.push(k);
+                     for(var i =0; i<  eventListeners.length ;i++){
+                         keys.push(eventListeners[i].event);
                      }
                      var data = { id: id , events: keys};
                      log.info("Subscribing using", data);
                      subscribe( data);
+                     cb();
                  }                     
              });
 }
@@ -108,17 +146,21 @@ function start(err, cb){
 
 var eventHash = {};
 
-function diffState(intialState, updatedState){
+function generateEventList(intialState, updatedState){
     eventList = [];
     for( var i =0 ; i < eventListeners.length ; i++){
-        if( _isEqual(getValue(intialState , eventListeners[i].event),getValue(updatedState , eventListeners[i].event) )){
+        if( !_.isEqual(getValue(intialState , eventListeners[i].event),getValue(updatedState , eventListeners[i].event) )){
+
             eventList.push( eventListeners[i]);
         }
     }
+    return eventList;
 }
 
 function getValue(obj, name) {
-    if (Object.hasOwnProperty(obj, name))
+    if(obj===null)
+        return null;
+    if (obj.hasOwnProperty( name))
         return obj[name];
     var keys = name.split('.');
     for (var i = 0; i < keys.length; ++i) {
@@ -137,26 +179,14 @@ function runEventHandlers( eventId){
     eventHash[eventId].newState = null;
     eventHash[eventId].processing = true; 
     eventList = generateEventList( eventHash[eventId].internalState, newState);
-
-    /*
-      var parts = req.body.event.split('.');
-      var eventList = [parts[0]];
-      log.info("Matching the following events:");
-      log.info(parts[0]);
-      
-      for(var i = 1 ; i < parts.length ; i++){
-      log.info(eventList[i]);
-      eventList.push( eventList[i-1]+"." + parts[i]);
-      }
-
-    */
+    log.info( "Matched events ", eventList);
+    var i=0;
     var callback = function(updatedState){
         i = i+1;
         eventHash[eventId].internalState = updatedState;
-        
-        if( eventsListeners.length == i ){
+        if( eventList.length == i ){
             //send updated state
-            update({ state: internalState , cid: req.body.eventId });
+            updateEvent( eventHash[eventId].internalState );
             //If new state exists in queue, run handlers again
             if( eventHash[eventId].newState){
                 runEventHandlers(eventId);
@@ -169,28 +199,24 @@ function runEventHandlers( eventId){
         conversationState = updatedState;
         runEventListener(i, callback);
     };
-    var runEventListener =  function(i ,  cb ){
+    var runEventListener =  function(cb ){
         for( var j =0 ; j< eventList.length; j++){
-            eventList[i].callback( null , newState, eventHash[eventId].internalState , callback);
-
+            eventList[i].callback( null , newState, eventHash[eventId].internalState , cb);
         }
     };
-    runEventListeners(0, callback );
+    runEventListener(callback );
 }
 
 
 /*
-  Parameter names:
-  xi-event
-  matched
-
-  //match-needs to be 
+  key:
+xi.event
   */
 function eventHandler(req , res ,next){
-
-    log.debug( {req: req});
-    var state = req.body.state;
-    var eventId = req.body.eventId;
+    log.info("Received an event");
+    log.debug(req.params);
+    var state = req.params;
+    var eventId =  req.params['xi.event'].id;
 
     //processing -> if handlers are currently being executed
     if(!eventHash[eventId]){
@@ -212,3 +238,5 @@ module.exports.on = on;
 module.exports.setName = setName;
 module.exports.start = start;
 module.exports.eventHandler = eventHandler;
+module.exports.postEvent = postEvent;
+module.exports.updateEvent = updateEvent;
