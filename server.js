@@ -35,7 +35,7 @@ function message(req, res, next) {
 
 server.get('/ping', ping);
 
-server.post('/message', xal.messageHandler);
+server.post('/event', xal.eventHandler);
 
 server.listen(2015, function() {
   log.info('%s listening at %s', server.name, server.url);
