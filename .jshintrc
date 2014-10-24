@@ -1,5 +1,3 @@
-/* For jshint anywhere other than Grunt */
-
 {
     "strict": true,
     "camelcase": true,

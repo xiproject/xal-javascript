@@ -22,24 +22,7 @@ module.exports = function(grunt) {
                 }
             },
             options: {
-                strict: true,
-                camelcase: true,
-                curly: true,
-                eqeqeq: true,
-                forin: true,
-                quotmark: true,
-                undef: true,
-                unused: true,
-                node: true,
-                force: true,
-                globals: {
-                    describe: false,
-                    it: false,
-                    before: false,
-                    beforeEach: false,
-                    after: false,
-                    afterEach: false
-                }
+                jshintrc: true
             }
         },
         jsbeautifier: {
