@@ -3,6 +3,7 @@
 var xal = require('../lib/xal');
 var xi = require('../lib/xi');
 var sinon = require('sinon');
+require('should');
 
 describe('Xal', function() {
     describe('#register', function() {
@@ -14,6 +15,10 @@ describe('Xal', function() {
         });
         it('should register successfully', function(done) {
             xal.register(null, done);
+        });
+        it('should be able to retrieve the id correctly', function() {
+            var id = xal.getId();
+            id.should.equal('foobar');
         });
         after(function() {
             xi.post.restore();
