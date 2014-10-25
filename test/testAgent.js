@@ -21,7 +21,7 @@ xal.on('xi.event.input.text', function(err, newState, oldState, next) {
     }
 });
 
-xal.start(null, function() {
+xal.start(function() {
     xal.postEvent({
         'xi.event': {
             input: {

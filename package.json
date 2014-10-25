@@ -9,6 +9,7 @@
   "license": "ISC",
   "dependencies": {
     "bunyan": "^1.2.0",
+    "ip": "^0.3.2",
     "node-uuid": "^1.4.1",
     "request": "^2.45.0",
     "restify": "^2.8.3",
