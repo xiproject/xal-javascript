@@ -22,7 +22,7 @@ xal.on('xi.event.input.text', function(err, newState, oldState, next) {
 });
 
 xal.start(function() {
-    xal.postEvent({
+    xal.createEvent({
         'xi.event': {
             input: {
                 text: 'Hello World'

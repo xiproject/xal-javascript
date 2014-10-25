@@ -7,13 +7,28 @@ var ip = require('ip');
 
 require('should');
 
+function stubPost(agentId, eventId) {
+    return function(url, data, cb) {
+        if (url === '/register') {
+            cb(null, null, null, {
+                id: agentId
+            });
+        } else if (url === '/subscribe') {
+            cb(null, null, null, {});
+        } else if (url === '/event') {
+            cb(null, null, null, {
+                'xi.event': {
+                    id: eventId
+                }
+            });
+        }
+    };
+}
+
 describe('Xal', function() {
     describe('#register', function() {
         before(function() {
-            sinon.stub(xi, 'post')
-                .callsArgWith(2, null, null, null, {
-                    id: 'foobar'
-                });
+            sinon.stub(xi, 'post', stubPost('foobar'));
         });
         it('should register successfully', function(done) {
             xal.register(null, done);
@@ -29,15 +44,7 @@ describe('Xal', function() {
 
     describe('#start', function() {
         before(function(done) {
-            sinon.stub(xi, 'post', function(url, data, cb) {
-                if (url === '/register') {
-                    cb(null, null, null, {
-                        id: 'foobar2'
-                    });
-                } else if (url === '/subscribe') {
-                    cb(null, null, null, {});
-                }
-            });
+            sinon.stub(xi, 'post', stubPost('foobar2'));
             xal.setName('testAgent');
             xal.start(done);
         });
@@ -62,8 +69,35 @@ describe('Xal', function() {
                 })
                 .should.equal(true);
         });
-        after(function() {
+        after(function(done) {
             xi.post.restore();
+            xal.stop(done);
+        });
+    });
+
+    describe('#createEvent', function() {
+        before(function(done) {
+            sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+            xal.setName('testAgent');
+            xal.start(done);
+        });
+        it('should create an event', function(done) {
+            xal.createEvent({
+                'xi.event': {
+                    input: {
+                        text: 'Hello World'
+                    }
+                }
+            }, function(err, body) {
+                (err === null).should.equal(true);
+                body['xi.event'].id.should.equal('someEventId');
+                // TODO: Add test to retrieve event from XAL
+                done();
+            });
+        });
+        after(function(done) {
+            xi.post.restore();
+            xal.stop(done);
         });
     });
 

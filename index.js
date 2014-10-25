@@ -1,3 +1,3 @@
-var Xal = require('./lib/xal');
+var xal = require('./lib/xal');
 
-module.exports = new Xal();
+module.exports = xal;
