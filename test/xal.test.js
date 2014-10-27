@@ -4,6 +4,7 @@ var xal = require('../lib/xal');
 var xi = require('../lib/xi');
 var sinon = require('sinon');
 var ip = require('ip');
+var server = require('../lib/server');
 require('should');
 
 
@@ -79,7 +80,7 @@ describe('Xal', function() {
             xi.post
                 .calledWith('/register', {
                     name: 'testAgent',
-                    url: 'http://' + ip.address() + ':2015'
+                    url: server.getUrl()
                 })
                 .should.equal(true);
         });
@@ -105,17 +106,14 @@ describe('Xal', function() {
             }, done);
         });
         it('should create an event', function(done) {
-            xal.createEvent({
-                'xi.event': {
-                    input: {
-                        text: 'Hello World'
-                    }
-                }
-            }, function(err, body) {
-                (err === null).should.equal(true);
-                body['xi.event'].id.should.equal('someEventId');
-                // TODO: Add test to retrieve event from XAL
-                done();
+            var oldDone = done;
+            xal.createEvent('xi.event.input.text', function(state, done) {
+                state.put('xi.event.input.text', 'Hello World');
+                done(state, function(err, state) {
+                    (err === null).should.equal(true);
+                    state.get('xi.event.id').should.equal('someEventId');
+                    oldDone();
+                });
             });
         });
         after(function(done) {
