@@ -4,8 +4,29 @@ var xal = require('../lib/xal');
 var xi = require('../lib/xi');
 var sinon = require('sinon');
 var ip = require('ip');
-
 require('should');
+
+
+
+function mockRequest(params) {
+    var request = {
+        log: {
+            error: function() {},
+            warn: function() {},
+            info: function() {},
+            debug: function() {}
+        }
+    };
+    request.params = params;
+    return request;
+}
+
+function mockResponse(cb) {
+    return {
+        send: cb || function() {}
+    };
+}
+
 
 function stubPost(agentId, eventId) {
     return function(url, data, cb) {
@@ -101,6 +122,36 @@ describe('Xal', function() {
             xi.post.restore();
             xal.stop(done);
         });
+    });
+
+    describe('#onEvent', function() {
+        before(function(done) {
+            sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+            xal.start({
+                name: 'testAgent'
+            }, done);
+        });
+
+        it('should register a handler', function(done) {
+            xal.on('xi.event.input.text', function(state, next) {
+                state.get('xi.event.input.text').should.equal('Hello World');
+                next(state);
+                done();
+            });
+            var event = {
+                input: {
+                    text: 'Hello World'
+                }
+            };
+            xal.event(mockRequest({
+                'xi.event': event
+            }), mockResponse(), function() {});
+        });
+
+        after(function(done) {
+            xal.stop(done);
+        });
+
     });
 
 });
