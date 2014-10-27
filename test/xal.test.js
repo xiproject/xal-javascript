@@ -45,8 +45,9 @@ describe('Xal', function() {
     describe('#start', function() {
         before(function(done) {
             sinon.stub(xi, 'post', stubPost('foobar2'));
-            xal.setName('testAgent');
-            xal.start(done);
+            xal.start({
+                name: 'testAgent'
+            }, done);
         });
         it('should make two requests to xi-core', function() {
             xal.getId().should.equal('foobar2');
@@ -78,8 +79,9 @@ describe('Xal', function() {
     describe('#createEvent', function() {
         before(function(done) {
             sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
-            xal.setName('testAgent');
-            xal.start(done);
+            xal.start({
+                name: 'testAgent'
+            }, done);
         });
         it('should create an event', function(done) {
             xal.createEvent({
