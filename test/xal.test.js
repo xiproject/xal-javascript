@@ -3,7 +3,6 @@
 var xal = require('../lib/xal');
 var xi = require('../lib/xi');
 var sinon = require('sinon');
-var ip = require('ip');
 var server = require('../lib/server');
 require('should');
 
@@ -122,7 +121,45 @@ describe('Xal', function() {
         });
     });
 
-    describe('#onEvent', function() {
+
+
+    describe('#eventHandlers', function() {
+
+        describe('handler registering', function() {
+            before(function(done) {
+                sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+                xal.start({
+                    name: 'testAgent'
+                }, done);
+            });
+
+            it('should register a handler', function(done) {
+                xal.on('xi.event.input.text', function(state, next) {
+                    state.get('xi.event.input.text').should.equal('Hello World again');
+                    next(state);
+                    done();
+                });
+                var event = {
+                    input: {
+                        text: 'Hello World again'
+                    }
+                };
+                xal.event(mockRequest({
+                    'xi.event': event
+                }), mockResponse(), function() {});
+            });
+
+            after(function(done) {
+                xi.post.restore();
+                xal.stop(done);
+            });
+
+        });
+
+    });
+
+    describe('handler ordering', function() {
+
         before(function(done) {
             sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
             xal.start({
@@ -130,12 +167,19 @@ describe('Xal', function() {
             }, done);
         });
 
-        it('should register a handler', function(done) {
-            xal.on('xi.event.input.text', function(state, next) {
-                state.get('xi.event.input.text').should.equal('Hello World');
+        it('should call handlers in order', function(done) {
+
+            var firstCallback = sinon.spy(function(state, next) {
                 next(state);
-                done();
             });
+
+            var secondCallback = function(state, next) {
+                next(state);
+                firstCallback.called.should.be.equal(true);
+                done();
+            };
+            xal.on('xi.event.input.text', firstCallback);
+            xal.on('xi.event.input', secondCallback);
             var event = {
                 input: {
                     text: 'Hello World'
@@ -144,12 +188,12 @@ describe('Xal', function() {
             xal.event(mockRequest({
                 'xi.event': event
             }), mockResponse(), function() {});
-        });
 
+        });
         after(function(done) {
+            xi.post.restore();
             xal.stop(done);
         });
 
     });
-
 });
