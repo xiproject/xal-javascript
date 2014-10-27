@@ -156,44 +156,46 @@ describe('Xal', function() {
 
         });
 
-    });
+        describe('handler ordering', function() {
 
-    describe('handler ordering', function() {
-
-        before(function(done) {
-            sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
-            xal.start({
-                name: 'testAgent'
-            }, done);
-        });
-
-        it('should call handlers in order', function(done) {
-
-            var firstCallback = sinon.spy(function(state, next) {
-                next(state);
+            before(function(done) {
+                sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+                xal.start({
+                    name: 'testAgent'
+                }, done);
             });
 
-            var secondCallback = function(state, next) {
-                next(state);
-                firstCallback.called.should.be.equal(true);
-                done();
-            };
-            xal.on('xi.event.input.text', firstCallback);
-            xal.on('xi.event.input', secondCallback);
-            var event = {
-                input: {
-                    text: 'Hello World'
-                }
-            };
-            xal.event(mockRequest({
-                'xi.event': event
-            }), mockResponse(), function() {});
+            it('should call handlers in order', function(done) {
+
+                var firstCallback = sinon.spy(function(state, next) {
+                    next(state);
+                });
+
+                var secondCallback = function(state, next) {
+                    next(state);
+                    firstCallback.called.should.be.equal(true);
+                    done();
+                };
+                xal.on('xi.event.input.text', firstCallback);
+                xal.on('xi.event.input', secondCallback);
+                var event = {
+                    input: {
+                        text: 'Hello World'
+                    }
+                };
+                xal.event(mockRequest({
+                    'xi.event': event
+                }), mockResponse(), function() {});
+
+            });
+            after(function(done) {
+                xi.post.restore();
+                xal.stop(done);
+            });
 
         });
-        after(function(done) {
-            xi.post.restore();
-            xal.stop(done);
-        });
+
 
     });
+
 });
