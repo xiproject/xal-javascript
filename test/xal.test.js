@@ -121,10 +121,7 @@ describe('Xal', function() {
         });
     });
 
-
-
     describe('#eventHandlers', function() {
-
         describe('handler registering', function() {
             before(function(done) {
                 sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
@@ -194,8 +191,56 @@ describe('Xal', function() {
             });
 
         });
-
-
     });
 
+    describe('#lookupRegistry', function() {
+        describe('when agent exists', function() {
+            before(function() {
+                sinon.stub(xi, 'get', function(url, cb) {
+                    cb(null, null, null, {
+                        agent: {
+                            name: 'testAgent',
+                            id: '1234'
+                        }
+                    });
+                });
+            });
+            it('should return agent for a given name', function(done) {
+                xal.getAgent({
+                    name: 'testAgent'
+                }, function(err, agent) {
+                    agent.id.should.be.equal('1234');
+                    done();
+                });
+
+            });
+
+            after(function() {
+                xi.get.restore();
+            });
+        });
+
+        describe('when does not exist', function() {
+
+            before(function() {
+                sinon.stub(xi, 'get', function(url, cb) {
+                    cb({}, null, {
+                        statusCode: 404
+                    }, null);
+                });
+            });
+            it('should return null if agent does not exist', function(done) {
+                xal.getAgent({
+                    name: 'testAgent'
+                }, function(err, agent) {
+                    (agent === null).should.be.equal(true);
+                    done();
+                });
+            });
+
+            after(function() {
+                xi.get.restore();
+            });
+        });
+    });
 });
