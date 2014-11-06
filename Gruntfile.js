@@ -23,7 +23,7 @@ module.exports = function(grunt) {
             },
             options: {
                 jshintrc: true
-            },
+            }
         },
         jsbeautifier: {
             default: {
