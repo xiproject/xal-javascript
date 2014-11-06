@@ -5,8 +5,8 @@ var xi = require('../lib/xi');
 var sinon = require('sinon');
 var server = require('../lib/server');
 var utils = require('../lib/utils');
-require('should');
-
+var should = require('should');
+var _ = require('lodash');
 
 
 
@@ -130,25 +130,121 @@ describe('Xal', function() {
         });
     });
 
-    describe('event', function(){
-        before(function(done) {
-            sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
-            xal.start({
-                name: 'testAgent'
-            }, done);
-        });
+    describe('event', function() {
 
-        it('leaf should have timestamp',function(){
-            xal.createEvent('xi.event.input.text', function(state,done){
-                state.put('xi.event.input.text', 'Hello world');
-                state.get('xi.event.input.text')[0].should.have.property('timestamp');
-                done(state);
+        describe('#forEach', function() {
+            before(function(done) {
+                sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+                xal.start({
+                    name: 'testAgent'
+                }, done);
             });
+
+            it('should iterate over all values', function(done) {
+
+                xal.createEvent('xi.event.input.text', function(state, next) {
+
+                    var xiKeys = {
+                        'xi.event.input.text': 'Hello World',
+                        'xi.event.output.text': 'Goodbye World',
+                        'xi.event.presence.get': 'true'
+                    };
+
+                    for (var key in xiKeys) {
+                        if (xiKeys.hasOwnProperty(key)) {
+                            state.put(key, xiKeys[key]);
+                        }
+                    }
+
+                    var testLeaf = [{
+                        value: 'Hello Again',
+                        source: 'fake1',
+                        certainty: 1
+                    }, {
+                        value: 'Hello Again',
+                        source: 'fake2',
+                        certainty: 1
+                    }];
+                    state.put('xi.event.different.test', testLeaf[0]);
+                    state.put('xi.event.different.test', testLeaf[1]);
+
+                    state.forEach(function(key, val) {
+                        if (key === 'xi.event.different.test') {
+                            for (var i = 0; i < val; ++i) {
+                                testLeaf.should.have(val[i]);
+                            }
+
+                        } else {
+
+                            xiKeys.should.have.property(key, val[0].value);
+                        }
+                        delete xiKeys[key];
+                    });
+
+                    xiKeys.should.eql({});
+
+                    next(state);
+                    done();
+                });
+
+            });
+            after(function(done) {
+                xi.post.restore();
+                xal.stop(done);
+            });
+
+
+
         });
-        after(function(done) {
-            xi.post.restore();
-            xal.stop(done);
-        }); 
+        describe('#put', function() {
+            beforeEach(function(done) {
+                sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+                xal.start({
+                    name: 'testAgent'
+                }, done);
+            });
+
+            it('leaf should have timestamp', function(done) {
+                xal.createEvent('xi.event.input.text', function(state, next) {
+                    state.put('xi.event.input.text', 'Hello world');
+                    state.get('xi.event.input.text')[0].should.have.property('timestamp');
+                    next(state);
+                    done();
+                });
+            });
+
+            it('should overwrite leafs with the same source', function(done) {
+                xal.createEvent('xi.event.input.text', function(state, next) {
+                    var val1 = {
+                        value: 'Hello world',
+                        source: 'source',
+                        certainty: 1
+                    };
+                    var val2 = {
+                        value: 'Hello world2',
+                        source: 'source',
+                        certainty: 1
+                    };
+                    state.put('xi.event.input.text', val1);
+                    var get1 = state.get('xi.event.input.text')[0];
+                    delete get1.timestamp;
+                    get1.should.eql(val1);
+                    state.put('xi.event.input.text', val2);
+                    state.get('xi.event.input.text').length.should.equal(1);
+                    var get2 = state.get('xi.event.input.text')[0];
+                    delete get2.timestamp;
+                    get2.should.eql(val2);
+
+                    done();
+                });
+
+            });
+            afterEach(function(done) {
+                xi.post.restore();
+                xal.stop(done);
+            });
+
+        });
     });
 
     describe('eventHandlers', function() {
@@ -248,23 +344,24 @@ describe('Xal', function() {
         /* TODO: This test should be made better */
 
         it('should queue event when handler is processing', function(done) {
-            var callIndex = 0;
             var handler = sinon.spy(function(state, next) {
-                callIndex = callIndex + 1;
                 var event = utils.createEvent('alienAgent');
                 event.put('xi.event.input.text', 'hello world2');
                 event.get('xi.event').id = 'fakeid';
-                xal.event(mockRequest(
-                    event
-                ), mockResponse(), function() {});
-
-                setImmediate(function() {
-                    handler.callCount.should.be.equal(callIndex);
+                if (handler.callCount === 1) {
+                    xal.event(mockRequest(
+                        event
+                    ), mockResponse(), function() {});
+                    setImmediate(function() {
+                        handler.callCount.should.equal(1);
+                        next(state);
+                    });
+                } else if (handler.callCount === 2) {
                     next(state);
-                    if (handler.callCount === 2) {
-                        done();
-                    }
-                });
+                    done();
+                } else {
+                    handler.callCount.should.equal(2, 'How many roads must a man walk down?');
+                }
             });
             xal.on('xi.event.input.text', handler);
 
@@ -272,6 +369,55 @@ describe('Xal', function() {
             event.put('xi.event.input.text', 'hello world1');
             event.get('xi.event').id = 'fakeid';
             xal.event(mockRequest(event), mockResponse(), function() {});
+        });
+
+        it('should not call handlers for unchanged state', function(done) {
+            var handler1 = sinon.spy(function(state, next) {
+                handler1.calledOnce.should.be.ok;
+                next(state);
+            });
+
+            var handler2 = sinon.spy(function(state, next) {
+                var event = _.cloneDeep(state);
+                (event !== state).should.be.ok;
+                event.put('xi.event.input.text2', {
+                    value: 'newVal',
+                    source: 'alientAgent',
+                    certainty: 1
+                });
+                handler1.calledOnce.should.be.ok;
+                if (handler2.callCount === 1) {
+                    xal.event(mockRequest(
+                        event
+                    ), mockResponse(), function() {});
+
+                    next(state);
+                } else if (handler2.callCount === 2) {
+                    next(state);
+                    done();
+                } else {
+                    handler2.callCount.should.equal(2, 'How many roads must a man walk down?');
+                }
+            });
+
+            xal.on('xi.event.input.text1', handler1);
+            xal.on('xi.event.input.text2', handler2);
+
+            xal.createEvent('xi.event.input.text1', function(event, next) {
+                event.put('xi.event.input.text1', {
+                    value: 'oldVal1',
+                    source: 'alientAgent',
+                    certainty: 1
+                });
+                event.put('xi.event.input.text2', {
+                    value: 'oldVal2',
+                    source: 'alientAgent',
+                    certainty: 1
+                });
+                event.get('xi.event').id = 'fakeid';
+                xal.event(mockRequest(event), mockResponse(), function() {});
+            });
+
         });
 
         afterEach(function(done) {
