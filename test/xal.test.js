@@ -128,85 +128,67 @@ describe('Xal', function() {
     });
 
     describe('#eventHandlers', function() {
-        describe('handlerInvoker', function() {
-            before(function(done) {
-                sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
-                sinon.stub(xi, 'put', stubPut);
-                xal.start({
-                    name: 'testAgent'
-                }, done);
-            });
 
-            it('should invoke handler when event matches', function(done) {
-                xal.on('xi.event.input.text', function(state, next) {
-                    state.get('xi.event.input.text').should.equal('Hello World again');
-                    next(state);
-                    done();
-                });
-                var event = {
-                    input: {
-                        text: 'Hello World again'
-                    },
-                    id: 'fakeid'
-                };
-                xal.event(mockRequest({
-                    xi: {
-                        event: event
-                    }
-                }), mockResponse(), function() {});
+        beforeEach(function(done) {
+            sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+            sinon.stub(xi, 'put', stubPut);
+            xal.start({
+                name: 'testAgent'
+            }, done);
+        });
+
+        it('should invoke handler when event matches', function(done) {
+            xal.on('xi.event.input.text', function(state, next) {
+                state.get('xi.event.input.text').should.equal('Hello World again');
+                next(state);
+                done();
             });
+            var event = {
+                input: {
+                    text: 'Hello World again'
+                },
+                id: 'fakeid'
+            };
+            xal.event(mockRequest({
+                xi: {
+                    event: event
+                }
+            }), mockResponse(), function() {});
+        });
 
 
-            after(function(done) {
-                xi.post.restore();
-                xi.put.restore();
-                xal.stop(done);
+        it('should call handlers in order', function(done) {
+            var firstCallback = sinon.spy(function(state, next) {
+                next(state);
             });
+            var secondCallback = function(state, next) {
+                next(state);
+                firstCallback.called.should.be.equal(true);
+                done();
+            };
+            xal.on('xi.event.input.text', firstCallback);
+            xal.on('xi.event.input', secondCallback);
+            var event = {
+                input: {
+                    text: 'Hello World'
+                },
+                id: 'fakeid'
+            };
+            xal.event(mockRequest({
+                xi: {
+                    event: event
+                }
+            }), mockResponse(), function() {});
 
         });
 
-        describe('handler ordering', function() {
-
-            before(function(done) {
-                sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
-                sinon.stub(xi, 'put', stubPut);
-                xal.start({
-                    name: 'testAgent'
-                }, done);
-            });
-
-            it('should call handlers in order', function(done) {
-                var firstCallback = sinon.spy(function(state, next) {
-                    next(state);
-                });
-                var secondCallback = function(state, next) {
-                    next(state);
-                    firstCallback.called.should.be.equal(true);
-                    done();
-                };
-                xal.on('xi.event.input.text', firstCallback);
-                xal.on('xi.event.input', secondCallback);
-                var event = {
-                    input: {
-                        text: 'Hello World'
-                    },
-                    id: 'fakeid'
-                };
-                xal.event(mockRequest({
-                    xi: {
-                        event: event
-                    }
-                }), mockResponse(), function() {});
-
-            });
-
-            after(function(done) {
-                xi.put.restore();
-                xi.post.restore();
-                xal.stop(done);
-            });
-
+        afterEach(function(done) {
+            xi.put.restore();
+            xi.post.restore();
+            xal.stop(done);
         });
+
+
     });
 
     describe('#lookupRegistry', function() {
