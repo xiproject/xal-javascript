@@ -4,7 +4,9 @@ var xal = require('../lib/xal');
 var xi = require('../lib/xi');
 var sinon = require('sinon');
 var server = require('../lib/server');
+var utils = require('../lib/utils');
 require('should');
+
 
 
 
@@ -121,13 +123,35 @@ describe('Xal', function() {
                 });
             });
         });
+
         after(function(done) {
             xi.post.restore();
             xal.stop(done);
         });
     });
 
-    describe('#eventHandlers', function() {
+    describe('event', function(){
+        before(function(done) {
+            sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+            xal.start({
+                name: 'testAgent'
+            }, done);
+        });
+
+        it('leaf should have timestamp',function(){
+            xal.createEvent('xi.event.input.text', function(state,done){
+                state.put('xi.event.input.text', 'Hello world');
+                state.get('xi.event.input.text')[0].should.have.property('timestamp');
+                done(state);
+            });
+        });
+        after(function(done) {
+            xi.post.restore();
+            xal.stop(done);
+        }); 
+    });
+
+    describe('eventHandlers', function() {
 
         beforeEach(function(done) {
             sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
@@ -137,7 +161,7 @@ describe('Xal', function() {
             }, done);
         });
 
-        it('should invoke handler when event matches', function(done) {
+        it('should call handler when event matches', function(done) {
             xal.on('xi.event.input.text', function(state, next) {
                 state.get('xi.event.input.text').should.equal('Hello World again');
                 next(state);
@@ -155,7 +179,6 @@ describe('Xal', function() {
                 }
             }), mockResponse(), function() {});
         });
-
 
         it('should call handlers in order', function(done) {
             var firstCallback = sinon.spy(function(state, next) {
@@ -180,6 +203,75 @@ describe('Xal', function() {
                 }
             }), mockResponse(), function() {});
 
+        });
+
+        it('should send state if it is changed', function(done) {
+            sinon.spy(xal.putEvent);
+            xal.on('xi.event.input.text', function(state, next) {
+                state.put('xi.event.output.text', 'output');
+                next(state);
+                xal.putEvent.called.should.be(true);
+                done();
+            });
+
+            var event = {
+                id: 'fakeid'
+            };
+
+            xal.event(mockRequest({
+                xi: {
+                    event: event
+                }
+            }), mockResponse(), function() {});
+            done();
+
+        });
+
+        it('should not send state if it is unchanged', function(done) {
+            sinon.spy(xal.putEvent);
+            xal.on('xi.event.input.text', function(state, next) {
+                next(state);
+                xal.putEvent.called.should.be(false);
+                done();
+            });
+            var event = {
+                id: 'fakeid'
+            };
+            xal.event(mockRequest({
+                xi: {
+                    event: event
+                }
+            }), mockResponse(), function() {});
+            done();
+        });
+
+        /* TODO: This test should be made better */
+
+        it('should queue event when handler is processing', function(done) {
+            var callIndex = 0;
+            var handler = sinon.spy(function(state, next) {
+                callIndex = callIndex + 1;
+                var event = utils.createEvent('alienAgent');
+                event.put('xi.event.input.text', 'hello world2');
+                event.get('xi.event').id = 'fakeid';
+                xal.event(mockRequest(
+                    event
+                ), mockResponse(), function() {});
+
+                setImmediate(function() {
+                    handler.callCount.should.be.equal(callIndex);
+                    next(state);
+                    if (handler.callCount === 2) {
+                        done();
+                    }
+                });
+            });
+            xal.on('xi.event.input.text', handler);
+
+            var event = utils.createEvent('alienAgent');
+            event.put('xi.event.input.text', 'hello world1');
+            event.get('xi.event').id = 'fakeid';
+            xal.event(mockRequest(event), mockResponse(), function() {});
         });
 
         afterEach(function(done) {
@@ -218,7 +310,7 @@ describe('Xal', function() {
             });
         });
 
-        describe('when does not exist', function() {
+        describe('when agent does not exist', function() {
 
             before(function() {
                 sinon.stub(xi, 'get', function(url, cb) {
@@ -227,7 +319,7 @@ describe('Xal', function() {
                     }, null);
                 });
             });
-            it('should return null if agent does not exist', function(done) {
+            it('should return null', function(done) {
                 xal.getAgent({
                     name: 'testAgent'
                 }, function(err, agent) {
