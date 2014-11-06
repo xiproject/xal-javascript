@@ -46,6 +46,12 @@ function stubPost(agentId, eventId) {
     };
 }
 
+function stubPut() {
+    return function(url, data, cb) {
+        cb(null, null, null, null);
+    };
+
+}
 describe('Xal', function() {
     describe('#register', function() {
         before(function() {
@@ -122,15 +128,16 @@ describe('Xal', function() {
     });
 
     describe('#eventHandlers', function() {
-        describe('handler registering', function() {
+        describe('handlerInvoker', function() {
             before(function(done) {
                 sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+                sinon.stub(xi, 'put', stubPut);
                 xal.start({
                     name: 'testAgent'
                 }, done);
             });
 
-            it('should register a handler', function(done) {
+            it('should invoke handler when event matches', function(done) {
                 xal.on('xi.event.input.text', function(state, next) {
                     state.get('xi.event.input.text').should.equal('Hello World again');
                     next(state);
@@ -139,15 +146,20 @@ describe('Xal', function() {
                 var event = {
                     input: {
                         text: 'Hello World again'
-                    }
+                    },
+                    id: 'fakeid'
                 };
                 xal.event(mockRequest({
-                    'xi.event': event
+                    xi: {
+                        event: event
+                    }
                 }), mockResponse(), function() {});
             });
 
+
             after(function(done) {
                 xi.post.restore();
+                xi.put.restore();
                 xal.stop(done);
             });
 
@@ -157,17 +169,16 @@ describe('Xal', function() {
 
             before(function(done) {
                 sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+                sinon.stub(xi, 'put', stubPut);
                 xal.start({
                     name: 'testAgent'
                 }, done);
             });
 
             it('should call handlers in order', function(done) {
-
                 var firstCallback = sinon.spy(function(state, next) {
                     next(state);
                 });
-
                 var secondCallback = function(state, next) {
                     next(state);
                     firstCallback.called.should.be.equal(true);
@@ -178,14 +189,19 @@ describe('Xal', function() {
                 var event = {
                     input: {
                         text: 'Hello World'
-                    }
+                    },
+                    id: 'fakeid'
                 };
                 xal.event(mockRequest({
-                    'xi.event': event
+                    xi: {
+                        event: event
+                    }
                 }), mockResponse(), function() {});
 
             });
+
             after(function(done) {
+                xi.put.restore();
                 xi.post.restore();
                 xal.stop(done);
             });
