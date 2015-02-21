@@ -1,113 +1,122 @@
 'use strict';
 
 var xal = require('../lib/xal');
-var xi = require('../lib/xi');
+var core = require('../lib/core');
 var sinon = require('sinon');
 var server = require('../lib/server');
 var utils = require('../lib/utils');
 var should = require('should');
 var _ = require('lodash');
 
-
-
-function mockRequest(params) {
-    var request = {
-        log: {
-            error: function() {},
-            warn: function() {},
-            info: function() {},
-            debug: function() {}
+function stubRegister(agentId) {
+    return function(data, cb) {
+        if (cb) {
+            cb(null, agentId);
         }
     };
-    request.params = params;
-    return request;
 }
 
-function mockResponse(cb) {
-    return {
-        send: cb || function() {}
+function stubSubscribe() {
+    return function(data, cb) {
+        if (cb) {
+            cb(null, {});
+        }
     };
 }
 
-
-function stubPost(agentId, eventId) {
-    return function(url, data, cb) {
-        if (url === '/register') {
-            cb(null, null, null, {
-                id: agentId
-            });
-        } else if (url === '/subscribe') {
-            cb(null, null, null, {});
-        } else if (url === '/event') {
-            cb(null, null, null, {
+function stubCreateEvent(eventId) {
+    return function(data, cb) {
+        if (cb) {
+            cb(null, {
                 'xi.event': {
                     id: eventId
                 }
-            });
+            })
         }
     };
 }
 
-function stubPut() {
-    return function(url, data, cb) {
-        cb(null, null, null, null);
+function stubUpdateEvent() {
+    return function(data, cb) {
+        if (cb)
+            cb(null);
     };
+}
 
+function stubLookupRegistry(name, id) {
+    if (name === null) {
+        return function(data, cb) {
+
+            cb(null, null);
+        };
+    } else {
+        return function(data, cb) {
+            cb(null, {
+                name: name,
+                id: id
+            });
+        };
+    }
 }
 describe('Xal', function() {
     describe('#register', function() {
         before(function() {
-            sinon.stub(xi, 'post', stubPost('foobar'));
+            sinon.stub(core, 'register', stubRegister('foobar'));
         });
         it('should register successfully', function(done) {
-            xal.register(null, done);
+            xal.register('foobar', done);
         });
         it('should be able to retrieve the id correctly', function() {
             var id = xal.getId();
             id.should.equal('foobar');
         });
-        after(function() {
-            xi.post.restore();
+        after(function(done) {
+            core.register.restore();
+            xal.stop(done);
         });
     });
 
     describe('#start', function() {
         before(function(done) {
-            sinon.stub(xi, 'post', stubPost('foobar2'));
+            sinon.stub(core, 'register', stubRegister('foobar2'));
+            sinon.stub(core, 'subscribe', stubSubscribe());
             xal.start({
                 name: 'testAgent'
             }, done);
         });
         it('should make two requests to xi-core', function() {
-            xal.getId().should.equal('foobar2');
             xal.getName().should.equal('testAgent');
-            xi.post.calledTwice.should.equal(true);
+            xal.getId().should.equal('foobar2');
+            core.register.calledOnce.should.equal(true);
+            core.subscribe.calledOnce.should.equal(true);
         });
         it('should register with the name and url', function() {
-            xi.post
-                .calledWith('/register', {
+            core.register
+                .calledWith({
                     name: 'testAgent',
                     url: server.getUrl()
                 })
                 .should.equal(true);
         });
         it('should subscribe with the id and no events', function() {
-            xi.post
-                .calledWith('/subscribe', {
+            core.subscribe.calledWith({
                     id: xal.getId(),
                     events: []
                 })
                 .should.equal(true);
         });
         after(function(done) {
-            xi.post.restore();
+            core.register.restore();
+            core.subscribe.restore();
             xal.stop(done);
         });
     });
 
     describe('#createEvent', function() {
         before(function(done) {
-            sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+            sinon.stub(core, 'register', stubRegister('foobar3'));
+            sinon.stub(core, 'subscribe', stubSubscribe());
+            sinon.stub(core, 'createEvent', stubCreateEvent('someEventId'));
             xal.start({
                 name: 'testAgent'
             }, done);
@@ -125,7 +134,9 @@ describe('Xal', function() {
         });
 
         after(function(done) {
-            xi.post.restore();
+            core.register.restore();
+            core.subscribe.restore();
+            core.createEvent.restore();
             xal.stop(done);
         });
     });
@@ -134,7 +145,9 @@ describe('Xal', function() {
 
         describe('#forEach', function() {
             before(function(done) {
-                sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+                sinon.stub(core, 'register', stubRegister('foobar3'));
+                sinon.stub(core, 'subscribe', stubSubscribe());
+                sinon.stub(core, 'createEvent', stubCreateEvent('someEventId'));
                 xal.start({
                     name: 'testAgent'
                 }, done);
@@ -189,7 +202,9 @@ describe('Xal', function() {
 
             });
             after(function(done) {
-                xi.post.restore();
+                core.register.restore();
+                core.subscribe.restore();
+                core.createEvent.restore();
                 xal.stop(done);
             });
 
@@ -198,7 +213,9 @@ describe('Xal', function() {
         });
         describe('#put', function() {
             beforeEach(function(done) {
-                sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
+                sinon.stub(core, 'register', stubRegister('foobar3'));
+                sinon.stub(core, 'subscribe', stubSubscribe());
+                sinon.stub(core, 'createEvent', stubCreateEvent('someEventId'));
                 xal.start({
                     name: 'testAgent'
                 }, done);
@@ -240,7 +257,9 @@ describe('Xal', function() {
 
             });
             afterEach(function(done) {
-                xi.post.restore();
+                core.register.restore();
+                core.subscribe.restore();
+                core.createEvent.restore();
                 xal.stop(done);
             });
 
@@ -250,8 +269,10 @@ describe('Xal', function() {
     describe('eventHandlers', function() {
 
         beforeEach(function(done) {
-            sinon.stub(xi, 'post', stubPost('foobar3', 'someEventId'));
-            sinon.stub(xi, 'put', stubPut);
+            sinon.stub(core, 'register', stubRegister('foobar3'));
+            sinon.stub(core, 'subscribe', stubSubscribe());
+            sinon.stub(core, 'createEvent', stubCreateEvent('someEventId'));
+            sinon.stub(core, 'updateEvent', stubUpdateEvent);
             xal.start({
                 name: 'testAgent'
             }, done);
@@ -269,11 +290,11 @@ describe('Xal', function() {
                 },
                 id: 'fakeid'
             };
-            xal.event(mockRequest({
+            xal.event({
                 xi: {
                     event: event
                 }
-            }), mockResponse(), function() {});
+            });
         });
 
         it('should call handlers in order', function(done) {
@@ -293,11 +314,11 @@ describe('Xal', function() {
                 },
                 id: 'fakeid'
             };
-            xal.event(mockRequest({
+            xal.event({
                 xi: {
                     event: event
                 }
-            }), mockResponse(), function() {});
+            });
 
         });
 
@@ -314,11 +335,11 @@ describe('Xal', function() {
                 id: 'fakeid'
             };
 
-            xal.event(mockRequest({
+            xal.event({
                 xi: {
                     event: event
                 }
-            }), mockResponse(), function() {});
+            });
             done();
 
         });
@@ -333,11 +354,11 @@ describe('Xal', function() {
             var event = {
                 id: 'fakeid'
             };
-            xal.event(mockRequest({
+            xal.event({
                 xi: {
                     event: event
                 }
-            }), mockResponse(), function() {});
+            });
             done();
         });
 
@@ -349,9 +370,7 @@ describe('Xal', function() {
                 event.put('xi.event.input.text', 'hello world2');
                 event.get('xi.event').id = 'fakeid';
                 if (handler.callCount === 1) {
-                    xal.event(mockRequest(
-                        event
-                    ), mockResponse(), function() {});
+                    xal.event(event);
                     setImmediate(function() {
                         handler.callCount.should.equal(1);
                         next(state);
@@ -368,7 +387,7 @@ describe('Xal', function() {
             var event = utils.createEvent('alienAgent');
             event.put('xi.event.input.text', 'hello world1');
             event.get('xi.event').id = 'fakeid';
-            xal.event(mockRequest(event), mockResponse(), function() {});
+            xal.event(event);
         });
 
         it('should not call handlers for unchanged state', function(done) {
@@ -387,10 +406,7 @@ describe('Xal', function() {
                 });
                 handler1.calledOnce.should.be.ok;
                 if (handler2.callCount === 1) {
-                    xal.event(mockRequest(
-                        event
-                    ), mockResponse(), function() {});
-
+                    xal.event(event);
                     next(state);
                 } else if (handler2.callCount === 2) {
                     next(state);
@@ -415,14 +431,16 @@ describe('Xal', function() {
                     certainty: 1
                 });
                 event.get('xi.event').id = 'fakeid';
-                xal.event(mockRequest(event), mockResponse(), function() {});
+                xal.event(event);
             });
 
         });
 
         afterEach(function(done) {
-            xi.put.restore();
-            xi.post.restore();
+            core.register.restore();
+            core.subscribe.restore();
+            core.createEvent.restore();
+            core.updateEvent.restore();
             xal.stop(done);
         });
 
@@ -432,14 +450,8 @@ describe('Xal', function() {
     describe('#lookupRegistry', function() {
         describe('when agent exists', function() {
             before(function() {
-                sinon.stub(xi, 'get', function(url, cb) {
-                    cb(null, null, null, {
-                        agent: {
-                            name: 'testAgent',
-                            id: '1234'
-                        }
-                    });
-                });
+                sinon.stub(core, 'lookupRegistry', stubLookupRegistry('testAgent', '1234'));
+
             });
             it('should return agent for a given name', function(done) {
                 xal.getAgent({
@@ -452,18 +464,14 @@ describe('Xal', function() {
             });
 
             after(function() {
-                xi.get.restore();
+                core.lookupRegistry.restore();
             });
         });
 
         describe('when agent does not exist', function() {
 
             before(function() {
-                sinon.stub(xi, 'get', function(url, cb) {
-                    cb({}, null, {
-                        statusCode: 404
-                    }, null);
-                });
+                sinon.stub(core, 'lookupRegistry', stubLookupRegistry(null));
             });
             it('should return null', function(done) {
                 xal.getAgent({
@@ -475,7 +483,7 @@ describe('Xal', function() {
             });
 
             after(function() {
-                xi.get.restore();
+                core.lookupRegistry.restore();
             });
         });
     });
