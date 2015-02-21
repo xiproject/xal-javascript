@@ -58,13 +58,15 @@ module.exports = function(grunt) {
 
         },
         watch: {
-            files: ['lib/**/*.js', 'test/**/*.js' ],
+            files: ['lib/**/*.js', 'test/**/*.js'],
             tasks: ['env:test', 'mochaTest:watch']
+        },
+
         }
     });
 
     grunt.registerTask('test', ['env:test', 'jshint', 'jsbeautifier:test', 'mochaTest:test']);
-    grunt.registerTask('coverage', ['env:test', 'mochaTest:test','mochaTest:coverage']);
+    grunt.registerTask('coverage', ['env:test', 'mochaTest:test', 'mochaTest:coverage']);
     grunt.registerTask('beautify', ['jsbeautifier:default']);
     grunt.loadNpmTasks('grunt-contrib-jshint');
     grunt.loadNpmTasks('grunt-jsbeautifier');
